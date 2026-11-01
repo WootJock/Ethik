@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Loop – Schul-Feed (Demo)</title>
+  <style>
+    :root {
+      --bg: #09090b;
+      --panel: #151519;
+      --muted: #a1a1aa;
+      --text: #f5f5f7;
+      --accent: #f5f5f7;
+      --border: rgba(255,255,255,.12);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-snap-type: y mandatory; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    button { font: inherit; cursor: pointer; }
+    .topbar {
+      position: fixed; inset: 0 0 auto 0; z-index: 10; height: 58px;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 22px; background: linear-gradient(#09090bef, #09090b99, transparent);
+      pointer-events: none;
+    }
+    .brand { font-size: 22px; font-weight: 850; letter-spacing: -.8px; pointer-events: auto; }
+    .brand span { color: #a1a1aa; }
+    .demo-label {
+      pointer-events: auto; font-size: 11px; letter-spacing: .4px; color: #d4d4d8;
+      border: 1px solid #3f3f46; background: #18181bbf; border-radius: 999px; padding: 6px 10px;
+    }
+    .sound-toggle {
+      pointer-events: auto; display: grid; place-items: center; width: 38px; height: 38px;
+      padding: 0; color: white; background: #303033d9; border: 1px solid #ffffff30;
+      border-radius: 50%;
+    }
+    .sound-toggle svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .feed { width: 100%; }
+    .post {
+      min-height: 100svh; height: 100svh; scroll-snap-align: start; scroll-snap-stop: always;
+      position: relative; overflow: hidden; display: grid; place-items: center;
+      border-bottom: 1px solid #27272a; isolation: isolate;
+      background: #09090b;
+    }
+    .post::before {
+      content: ""; position: absolute; inset: 0; z-index: -1;
+      background: linear-gradient(180deg, rgba(0,0,0,.22), transparent 28%, rgba(0,0,0,.08) 55%, rgba(0,0,0,.8));
+    }
+    .placeholder {
+      width: min(78vw, 430px); height: min(78vh, 760px); min-height: 330px;
+      border: 1px solid rgba(255,255,255,.16); border-radius: 18px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      text-align: center; padding: 30px; gap: 16px;
+      background: linear-gradient(180deg, #242427, #111113 60%, #202023);
+      box-shadow: 0 20px 60px #0009;
+    }
+    .video-player {
+      display: block; width: min(78vw, 430px); height: min(78vh, 760px); min-height: 330px;
+      border: 1px solid rgba(255,255,255,.16); border-radius: 18px;
+      background: #000; object-fit: cover; box-shadow: 0 20px 60px #0009;
+    }
+    .video-player::-webkit-media-controls-overflow-button,
+    .video-player::-webkit-media-controls-fullscreen-button { display: none !important; }
+    .meme-slideshow {
+      position: relative; width: min(78vw, 430px); height: min(78vh, 760px); min-height: 330px;
+      overflow: hidden; border: 1px solid rgba(255,255,255,.16); border-radius: 18px;
+      background: #000; box-shadow: 0 20px 60px #0009; touch-action: pan-y;
+    }
+    .meme-track { display: flex; height: 100%; transition: transform .28s ease; }
+    .meme-slide { flex: 0 0 100%; display: grid; place-items: center; background: #000; }
+    .meme-slide img { width: 100%; height: 100%; object-fit: contain; user-select: none; -webkit-user-drag: none; }
+    .slide-button {
+      position: absolute; top: 50%; z-index: 1; width: 42px; height: 42px; border: 0; border-radius: 50%;
+      transform: translateY(-50%); background: #202020d9; color: white; font-size: 28px; line-height: 1;
+    }
+    .slide-button.previous { left: 12px; }
+    .slide-button.next { right: 12px; }
+    .slide-indicator {
+      position: absolute; z-index: 1; bottom: 14px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 6px; padding: 7px 9px; border-radius: 999px; background: #0009;
+    }
+    .slide-dot { width: 7px; height: 7px; padding: 0; border: 0; border-radius: 50%; background: #777; }
+    .slide-dot.active { background: white; }
+    .play {
+      width: 76px; height: 76px; display: grid; place-items: center; border-radius: 50%;
+      background: #ffffff18; border: 1px solid #ffffff30; font-size: 30px; padding-left: 5px;
+    }
+    .placeholder small { color: #d4d4d8; text-transform: uppercase; letter-spacing: 2px; font-size: 10px; }
+    .placeholder h2 { font-size: clamp(25px, 4vw, 39px); line-height: 1.08; margin: 0; letter-spacing: -1px; }
+    .placeholder p { max-width: 300px; color: #e4e4e7; line-height: 1.55; margin: 0; font-size: 15px; }
+    .replace-note { color: #a1a1aa; font-size: 11px; }
+    .post-info {
+      position: absolute; left: max(18px, calc(50% - 570px)); bottom: 24px;
+      width: min(42vw, 470px); z-index: 2; text-shadow: 0 2px 12px #000;
+    }
+    .creator { font-weight: 750; margin-bottom: 8px; }
+    .caption { line-height: 1.45; font-size: 14px; margin: 0 0 9px; }
+    .tags { color: #e4e4e7; font-size: 13px; }
+    .rail {
+      position: absolute; right: max(14px, calc(50% - 330px)); bottom: 30px; z-index: 3;
+      display: flex; flex-direction: column; align-items: center; gap: 17px;
+    }
+    .action { display: flex; flex-direction: column; align-items: center; gap: 5px; color: white; }
+    .action button {
+      border: 1px solid #ffffff20; width: 52px; height: 52px; border-radius: 50%;
+      background: #303033d9; color: white; font-size: 22px; backdrop-filter: blur(8px);
+      transition: transform .15s, background .15s;
+    }
+    .action button:active { transform: scale(.9); }
+    .action button svg { width: 23px; height: 23px; display: block; margin: auto; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .action button.active-like, .action button.active-dislike { background: #52525b; border-color: #e4e4e7; }
+    .action span { font-size: 11px; font-weight: 650; }
+    .avatar {
+      width: 43px; height: 43px; display: grid; place-items: center; border-radius: 50%;
+      background: #3f3f46; border: 2px solid white; font-weight: 800;
+      margin-bottom: 3px;
+    }
+    .bottom-hint {
+      position: fixed; z-index: 8; bottom: 10px; left: 50%; transform: translateX(-50%);
+      color: #d4d4d8; font-size: 11px; background: #18181bbf; border: 1px solid var(--border);
+      padding: 7px 12px; border-radius: 999px; pointer-events: none;
+    }
+    .modal-backdrop {
+      position: fixed; inset: 0; z-index: 30; background: #000a; display: none;
+      align-items: flex-end; justify-content: center;
+    }
+    .modal-backdrop.open { display: flex; }
+    .comments {
+      width: min(100%, 560px); max-height: 78svh; background: #18181b; border: 1px solid #3f3f46;
+      border-radius: 22px 22px 0 0; display: flex; flex-direction: column; overflow: hidden;
+      box-shadow: 0 -15px 60px #0008;
+    }
+    .modal-head { display: flex; justify-content: space-between; align-items: center; padding: 17px 20px; border-bottom: 1px solid #3f3f46; }
+    .modal-head h3 { margin: 0; font-size: 16px; }
+    .close { background: transparent; border: 0; color: white; font-size: 25px; }
+    .comment-list { overflow-y: auto; padding: 12px 18px; flex: 1; }
+    .comment { display: flex; gap: 10px; margin: 13px 0 18px; font-size: 13px; line-height: 1.4; }
+    .comment-avatar { width: 32px; height: 32px; flex: 0 0 32px; display: grid; place-items: center; border-radius: 50%; background: #3f3f46; font-size: 11px; font-weight: 800; }
+    .comment strong { display: block; margin-bottom: 3px; }
+    .comment p { margin: 0; color: #e4e4e7; }
+    .comment-form { display: flex; gap: 8px; padding: 12px; border-top: 1px solid #3f3f46; }
+    .comment-form input { min-width: 0; flex: 1; border-radius: 999px; border: 1px solid #52525b; background: #09090b; color: white; padding: 12px 14px; outline: none; }
+    .comment-form button { border: 0; background: #3f3f46; color: white; font-weight: 750; padding: 0 16px; border-radius: 999px; }
+    .toast { position: fixed; top: 70px; left: 50%; transform: translateX(-50%); z-index: 40; display:none; background:#27272a; border:1px solid #52525b; padding:10px 14px; border-radius:12px; font-size:12px; }
+    @media (min-width: 760px) {
+      .post { max-width: 100%; }
+      .placeholder { width: min(42vw, 460px); height: min(82vh, 780px); }
+      .video-player { width: min(42vw, 460px); height: min(82vh, 780px); }
+      .meme-slideshow { width: min(42vw, 460px); height: min(82vh, 780px); }
+      .post-info { left: max(22px, calc(50% - 650px)); }
+      .rail { right: max(20px, calc(50% - 330px)); }
+    }
+    @media (max-width: 759px) {
+      .topbar { padding: 0 14px; }
+      .demo-label { display: none; }
+      .post { min-height: 100vh; min-height: 100svh; }
+      .post-info { left: 16px; bottom: max(24px, env(safe-area-inset-bottom)); width: calc(100% - 100px); }
+      .rail { right: 12px; bottom: max(28px, env(safe-area-inset-bottom)); gap: clamp(10px, 2.4vh, 16px); }
+      .action button { width: 46px; height: 46px; font-size: 19px; }
+      .avatar { width: 39px; height: 39px; }
+      .placeholder { width: min(calc(100vw - 76px), 460px); height: min(82svh, 780px); min-height: 0; padding: 20px; }
+      .video-player { width: min(calc(100vw - 76px), 460px); height: min(82svh, 780px); min-height: 0; }
+      .meme-slideshow { width: min(calc(100vw - 76px), 460px); height: min(82svh, 780px); min-height: 0; }
+      .placeholder h2 { font-size: clamp(22px, 6vw, 30px); }
+      .placeholder p { font-size: 14px; }
+      .creator { font-size: 14px; }
+      .caption { font-size: 13px; }
+      .bottom-hint { white-space: nowrap; bottom: 7px; }
+    }
+    @media (max-height: 560px) and (max-width: 759px) {
+      .placeholder { height: 78svh; }
+      .rail { bottom: 12px; gap: 6px; }
+      .action button { width: 40px; height: 40px; }
+      .avatar { width: 34px; height: 34px; }
+      .post-info { bottom: 14px; }
+      .bottom-hint { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">loop<span>.</span></div>
+    <div class="demo-label">ETHIK-PROJEKT · DEMO</div>
+    <button class="sound-toggle" id="sound-toggle" type="button" aria-label="Ton aktivieren" title="Ton aktivieren">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15 9a5 5 0 0 1 0 6M18 6a9 9 0 0 1 0 12"/></svg>
+    </button>
+  </header>
+
+  <main class="feed" id="feed">
+    <!-- VIDEO-PLATZHALTER: Später im CSS/HTML durch echte <video> Elemente ersetzen. -->
+    <section class="post" style="--glow:#3b1b32" data-id="1" data-likes="12400" data-dislikes="231">
+      <video class="video-player" controls controlsList="nodownload noplaybackrate nofullscreen noremoteplayback" disablePictureInPicture playsinline preload="metadata" aria-label="Video: Sind Noten wirklich fair?">
+        <source src="videos/Simplivideo1.mp4" type="video/mp4">
+        Dein Browser kann dieses Video leider nicht abspielen.
+      </video>
+      <div class="post-info">
+        <div class="creator">@schulrealitaet</div>
+        <p class="caption">Manchmal sagt eine Note nicht alles darüber aus, was man wirklich kann. 💭</p>
+        <div class="tags">#schule #noten #lernen</div>
+      </div>
+      <div class="rail">
+        <div class="avatar">S</div>
+        <div class="action"><button class="like" aria-label="Gefällt mir" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10v11H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3Zm0 0 5-8a3 3 0 0 1 2 3l-1 5h6a2 2 0 0 1 2 2l-2 7a3 3 0 0 1-3 2H7"/></svg></button><span class="like-count">12,4 Tsd.</span></div>
+        <div class="action"><button class="dislike" aria-label="Gefällt mir nicht" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 14V3H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3Zm0 0 5 8a3 3 0 0 0 2-3l-1-5h6a2 2 0 0 0 2-2l-2-7a3 3 0 0 0-3-2H7"/></svg></button><span class="dislike-count">231</span></div>
+        <div class="action"><button class="comment-open" aria-label="Kommentare"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H6l-3 2v-9.5A7.5 7.5 0 0 1 10.5 4h2A7.5 7.5 0 0 1 20 11.5Z"/><path d="M8 10h8M8 14h5"/></svg></button><span>846</span></div>
+      </div>
+    </section>
+
+    <section class="post" style="--glow:#173c3c" data-id="2" data-likes="8700" data-dislikes="190">
+      <video class="video-player" controls controlsList="nodownload noplaybackrate nofullscreen noremoteplayback" disablePictureInPicture playsinline preload="metadata" aria-label="Video: Lernen ohne Druck">
+        <source src="videos/Simplivideo2.mp4" type="video/mp4">
+        Dein Browser kann dieses Video leider nicht abspielen.
+      </video>
+      <div class="post-info">
+        <div class="creator">@lernraum</div>
+        <p class="caption">Lernen könnte sich mehr um Fortschritt und weniger um die Angst vor Fehlern drehen.</p>
+        <div class="tags">#lernen #schule #motivation</div>
+      </div>
+      <div class="rail">
+        <div class="avatar">L</div>
+        <div class="action"><button class="like" aria-label="Gefällt mir" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10v11H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3Zm0 0 5-8a3 3 0 0 1 2 3l-1 5h6a2 2 0 0 1 2 2l-2 7a3 3 0 0 1-3 2H7"/></svg></button><span class="like-count">8,7 Tsd.</span></div>
+        <div class="action"><button class="dislike" aria-label="Gefällt mir nicht" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 14V3H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3Zm0 0 5 8a3 3 0 0 0 2-3l-1-5h6a2 2 0 0 0 2-2l-2-7a3 3 0 0 0-3-2H7"/></svg></button><span class="dislike-count">190</span></div>
+        <div class="action"><button class="comment-open" aria-label="Kommentare"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H6l-3 2v-9.5A7.5 7.5 0 0 1 10.5 4h2A7.5 7.5 0 0 1 20 11.5Z"/><path d="M8 10h8M8 14h5"/></svg></button><span>512</span></div>
+      </div>
+    </section>
+
+    <section class="post" style="--glow:#3a3218" data-id="3" data-likes="37" data-dislikes="2800">
+      <video class="video-player" controls controlsList="nodownload noplaybackrate nofullscreen noremoteplayback" disablePictureInPicture playsinline preload="metadata" aria-label="Video: Noten sind doch sinnvoll?">
+        <source src="videos/Minecraftredditstoryl%C3%A4nger.mp4" type="video/mp4">
+        Dein Browser kann dieses Video leider nicht abspielen.
+      </video>
+      <div class="post-info">
+        <div class="creator">@meinung_ecke</div>
+        <p class="caption">Eine andere Sichtweise: Noten können Orientierung geben. Was denkt ihr?</p>
+        <div class="tags">#diskussion #schule</div>
+      </div>
+      <div class="rail">
+        <div class="avatar">M</div>
+        <div class="action"><button class="like" aria-label="Gefällt mir" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10v11H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3Zm0 0 5-8a3 3 0 0 1 2 3l-1 5h6a2 2 0 0 1 2 2l-2 7a3 3 0 0 1-3 2H7"/></svg></button><span class="like-count">37</span></div>
+        <div class="action"><button class="dislike" aria-label="Gefällt mir nicht" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 14V3H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3Zm0 0 5 8a3 3 0 0 0 2-3l-1-5h6a2 2 0 0 0 2-2l-2-7a3 3 0 0 0-3-2H7"/></svg></button><span class="dislike-count">2.800</span></div>
+        <div class="action"><button class="comment-open" aria-label="Kommentare"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H6l-3 2v-9.5A7.5 7.5 0 0 1 10.5 4h2A7.5 7.5 0 0 1 20 11.5Z"/><path d="M8 10h8M8 14h5"/></svg></button><span>694</span></div>
+      </div>
+    </section>
+
+    <section class="post" style="--glow:#29204a" data-id="4" data-likes="15300" data-dislikes="104">
+      <video class="video-player" controls controlsList="nodownload noplaybackrate nofullscreen noremoteplayback" disablePictureInPicture playsinline preload="metadata" aria-label="Video: Fehler sind Teil des Lernens">
+        <source src="videos/subwaysurfershort.mp4" type="video/mp4">
+        Dein Browser kann dieses Video leider nicht abspielen.
+      </video>
+      <div class="post-info">
+        <div class="creator">@gedankenpause</div>
+        <p class="caption">Feedback kann helfen, besser zu werden – auch ohne eine klassische Note.</p>
+        <div class="tags">#feedback #schule #mindset</div>
+      </div>
+      <div class="rail">
+        <div class="avatar">G</div>
+        <div class="action"><button class="like" aria-label="Gefällt mir" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10v11H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3Zm0 0 5-8a3 3 0 0 1 2 3l-1 5h6a2 2 0 0 1 2 2l-2 7a3 3 0 0 1-3 2H7"/></svg></button><span class="like-count">15,3 Tsd.</span></div>
+        <div class="action"><button class="dislike" aria-label="Gefällt mir nicht" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 14V3H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3Zm0 0 5 8a3 3 0 0 0 2-3l-1-5h6a2 2 0 0 0 2-2l-2-7a3 3 0 0 0-3-2H7"/></svg></button><span class="dislike-count">104</span></div>
+        <div class="action"><button class="comment-open" aria-label="Kommentare"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H6l-3 2v-9.5A7.5 7.5 0 0 1 10.5 4h2A7.5 7.5 0 0 1 20 11.5Z"/><path d="M8 10h8M8 14h5"/></svg></button><span>1.203</span></div>
+      </div>
+    </section>
+
+    <section class="post" data-id="5" data-likes="6200" data-dislikes="86">
+      <div class="meme-slideshow" aria-label="Meme-Slideshow. Mit den Pfeilen oder durch Wischen wechseln.">
+        <div class="meme-track">
+          <div class="meme-slide"><img src="Memes%20slide%20show%201/b4n6v6.jpg" alt="Meme 1 von 6"></div>
+          <div class="meme-slide"><img src="Memes%20slide%20show%201/Change%20My%20Mind.png" alt="Meme 2 von 6"></div>
+          <div class="meme-slide"><img src="Memes%20slide%20show%201/Left%20Exit%2012%20Off%20Ramp.png" alt="Meme 3 von 6"></div>
+          <div class="meme-slide"><img src="Memes%20slide%20show%201/meme-1793310190562.png" alt="Meme 4 von 6"></div>
+          <div class="meme-slide"><img src="Memes%20slide%20show%201/meme-1793310268453.png" alt="Meme 5 von 6"></div>
+          <div class="meme-slide"><img src="Memes%20slide%20show%201/meme-1793310629460.png" alt="Meme 6 von 6"></div>
+        </div>
+        <button class="slide-button previous" type="button" aria-label="Vorheriges Meme">‹</button>
+        <button class="slide-button next" type="button" aria-label="Nächstes Meme">›</button>
+        <div class="slide-indicator" aria-label="Position in der Slideshow"></div>
+      </div>
+      <div class="post-info">
+        <div class="creator">@meme_ecke</div>
+        <p class="caption">Ethik-Memes zum Durchswipen.</p>
+        <div class="tags">#memes #ethik #schule</div>
+      </div>
+      <div class="rail">
+        <div class="avatar">M</div>
+        <div class="action"><button class="like" aria-label="Gefällt mir" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10v11H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3Zm0 0 5-8a3 3 0 0 1 2 3l-1 5h6a2 2 0 0 1 2 2l-2 7a3 3 0 0 1-3 2H7"/></svg></button><span class="like-count">6,2 Tsd.</span></div>
+        <div class="action"><button class="dislike" aria-label="Gefällt mir nicht" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 14V3H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3Zm0 0 5 8a3 3 0 0 0 2-3l-1-5h6a2 2 0 0 0 2-2l-2-7a3 3 0 0 0-3-2H7"/></svg></button><span class="dislike-count">86</span></div>
+        <div class="action"><button class="comment-open" aria-label="Kommentare"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H6l-3 2v-9.5A7.5 7.5 0 0 1 10.5 4h2A7.5 7.5 0 0 1 20 11.5Z"/><path d="M8 10h8M8 14h5"/></svg></button><span>214</span></div>
+      </div>
+    </section>
+  </main>
+
+  <div class="bottom-hint">↓ Scrollen, um weiterzusehen</div>
+  <div class="toast" id="toast" role="status"></div>
+
+  <div class="modal-backdrop" id="modal" role="dialog" aria-modal="true" aria-label="Kommentare">
+    <div class="comments">
+      <div class="modal-head"><h3 id="comment-title">Kommentare</h3><button class="close" id="close-modal" aria-label="Schließen">×</button></div>
+      <div class="comment-list" id="comment-list"></div>
+      <form class="comment-form" id="comment-form">
+        <input id="comment-input" placeholder="Kommentar hinzufügen …" maxlength="240" autocomplete="off">
+        <button type="submit">Senden</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // Alle Kommentare sind fiktive Beispieldaten für das Ethikprojekt.
+    const commentsByPost = {
+      1: [
+        ["lernmitmir", "Eine Note sagt nicht immer, wie viel man sich Mühe gegeben hat."],
+        ["mila.schule", "Bei Tests bin ich oft nervös, obwohl ich den Stoff kann."],
+        ["tom_09", "Feedback wäre manchmal hilfreicher als einfach nur eine Zahl."]
+      ],
+      2: [
+        ["studyday", "Ich würde lieber wissen, was ich verbessern kann."],
+        ["lena", "Lernen sollte doch mehr sein als Punkte sammeln."],
+        ["maxi_22", "Gute Idee, aber wie würde man Leistungen dann vergleichen?"]
+      ],
+      3: [
+        ["finnfragt", "Noten können aber auch helfen, den eigenen Stand einzuschätzen."],
+        ["paula", "Ich sehe das anders: Eine Zahl sagt nicht alles aus."],
+        ["schulblick", "Vielleicht braucht es eine Mischung aus Noten und Feedback?"],
+        ["real_talk", "Man sollte beide Seiten ernst nehmen und darüber diskutieren."]
+      ],
+      4: [
+        ["lea_lernt", "Genau! Fehler helfen einem, wenn man daraus lernen kann."],
+        ["jules", "Konkretes Feedback finde ich viel nützlicher."],
+        ["niko", "Ohne Noten müsste man trotzdem wissen, ob man die Lernziele erreicht."]
+      ],
+      5: []
+    };
+
+    const userVotes = new Map();
+    const modal = document.getElementById("modal");
+    const commentList = document.getElementById("comment-list");
+    const toast = document.getElementById("toast");
+    let activePostId = null;
+
+    // Beim Scrollen wird nur das Video abgespielt, das gerade im Mittelpunkt steht.
+    const feedVideos = [...document.querySelectorAll(".video-player")];
+    const soundToggle = document.getElementById("sound-toggle");
+    let soundEnabled = false;
+    let activeVideo = null;
+    function updateSoundButton() {
+      const label = soundEnabled ? "Ton ausschalten" : "Ton aktivieren";
+      soundToggle.setAttribute("aria-label", label);
+      soundToggle.title = label;
+    }
+    async function startVisibleVideo(video) {
+      activeVideo = video;
+      feedVideos.forEach(otherVideo => {
+        if (otherVideo !== video) otherVideo.pause();
+      });
+      video.muted = !soundEnabled;
+      try {
+        await video.play();
+      } catch (error) {
+        // Falls der Browser Ton-Autoplay blockiert, startet das Video zunächst stumm.
+        video.muted = true;
+        video.play().catch(() => {});
+        if (!soundEnabled) showToast("Video startet stumm. Tippe oben auf das Lautsprecher-Symbol für Ton.");
+      }
+    }
+    const videoVisibility = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting || entry.intersectionRatio < 0.6) {
+          entry.target.pause();
+        } else {
+          startVisibleVideo(entry.target);
+        }
+      });
+    }, { threshold: [0, 0.6] });
+    feedVideos.forEach(video => videoVisibility.observe(video));
+    soundToggle.addEventListener("click", async () => {
+      soundEnabled = !soundEnabled;
+      updateSoundButton();
+      if (soundEnabled && activeVideo) {
+        activeVideo.muted = false;
+        try {
+          await activeVideo.play();
+        } catch (error) {
+          activeVideo.muted = true;
+          soundEnabled = false;
+          updateSoundButton();
+          showToast("Der Ton konnte nicht aktiviert werden. Prüfe die Lautstärke des Geräts.");
+        }
+      } else if (!soundEnabled) {
+        feedVideos.forEach(video => { video.muted = true; });
+      }
+    });
+
+    document.querySelectorAll(".meme-slideshow").forEach(slideshow => {
+      const track = slideshow.querySelector(".meme-track");
+      const slides = [...slideshow.querySelectorAll(".meme-slide")];
+      const indicator = slideshow.querySelector(".slide-indicator");
+      let activeSlide = 0;
+      let startX = null;
+      const dots = slides.map((slide, index) => {
+        const dot = document.createElement("button");
+        dot.type = "button";
+        dot.className = "slide-dot";
+        dot.setAttribute("aria-label", `Meme ${index + 1} anzeigen`);
+        dot.addEventListener("click", () => showSlide(index));
+        indicator.append(dot);
+        return dot;
+      });
+      function showSlide(index) {
+        activeSlide = (index + slides.length) % slides.length;
+        track.style.transform = `translateX(-${activeSlide * 100}%)`;
+        dots.forEach((dot, dotIndex) => dot.classList.toggle("active", dotIndex === activeSlide));
+      }
+      slideshow.querySelector(".previous").addEventListener("click", () => showSlide(activeSlide - 1));
+      slideshow.querySelector(".next").addEventListener("click", () => showSlide(activeSlide + 1));
+      slideshow.addEventListener("pointerdown", event => { startX = event.clientX; });
+      slideshow.addEventListener("pointerup", event => {
+        if (startX === null) return;
+        const movedBy = event.clientX - startX;
+        if (Math.abs(movedBy) > 40) showSlide(activeSlide + (movedBy < 0 ? 1 : -1));
+        startX = null;
+      });
+      slideshow.addEventListener("pointercancel", () => { startX = null; });
+      showSlide(0);
+    });
+
+    function showToast(message) {
+      toast.textContent = message;
+      toast.style.display = "block";
+      clearTimeout(showToast.timer);
+      showToast.timer = setTimeout(() => toast.style.display = "none", 2200);
+    }
+    function formatCount(n) {
+      if (n >= 1000) return (n / 1000).toLocaleString("de-DE", { maximumFractionDigits: 1 }) + " Tsd.";
+      return String(n);
+    }
+    function renderComments(postId) {
+      commentList.innerHTML = "";
+      (commentsByPost[postId] || []).forEach(([name, text]) => addCommentElement(name, text));
+    }
+    function addCommentElement(name, text) {
+      const wrapper = document.createElement("div");
+      wrapper.className = "comment";
+      const avatar = document.createElement("div");
+      avatar.className = "comment-avatar";
+      avatar.textContent = name.slice(0, 1).toUpperCase();
+      const content = document.createElement("div");
+      const username = document.createElement("strong");
+      username.textContent = "@" + name;
+      const message = document.createElement("p");
+      message.textContent = text;
+      content.append(username, message);
+      wrapper.append(avatar, content);
+      commentList.append(wrapper);
+    }
+
+    document.querySelectorAll(".post").forEach(post => {
+      const id = post.dataset.id;
+      let likes = Number(post.dataset.likes);
+      let dislikes = Number(post.dataset.dislikes);
+      const likeButton = post.querySelector(".like");
+      const dislikeButton = post.querySelector(".dislike");
+      const likeCount = post.querySelector(".like-count");
+      const dislikeCount = post.querySelector(".dislike-count");
+
+      likeButton.addEventListener("click", () => {
+        const previous = userVotes.get(id);
+        if (previous === "like") {
+          likes--; userVotes.delete(id); likeButton.classList.remove("active-like");
+        } else {
+          if (previous === "dislike") { dislikes--; dislikeButton.classList.remove("active-dislike"); }
+          likes++; userVotes.set(id, "like"); likeButton.classList.add("active-like"); dislikeButton.classList.remove("active-dislike");
+        }
+        likeButton.setAttribute("aria-pressed", String(userVotes.get(id) === "like"));
+        dislikeButton.setAttribute("aria-pressed", String(userVotes.get(id) === "dislike"));
+        likeCount.textContent = formatCount(likes);
+        dislikeCount.textContent = formatCount(dislikes);
+      });
+      dislikeButton.addEventListener("click", () => {
+        const previous = userVotes.get(id);
+        if (previous === "dislike") {
+          dislikes--; userVotes.delete(id); dislikeButton.classList.remove("active-dislike");
+        } else {
+          if (previous === "like") { likes--; likeButton.classList.remove("active-like"); }
+          dislikes++; userVotes.set(id, "dislike"); dislikeButton.classList.add("active-dislike"); likeButton.classList.remove("active-like");
+        }
+        likeButton.setAttribute("aria-pressed", String(userVotes.get(id) === "like"));
+        dislikeButton.setAttribute("aria-pressed", String(userVotes.get(id) === "dislike"));
+        likeCount.textContent = formatCount(likes);
+        dislikeCount.textContent = formatCount(dislikes);
+      });
+      post.querySelector(".comment-open").addEventListener("click", () => {
+        activePostId = id;
+        document.getElementById("comment-title").textContent = "Kommentare · " + post.querySelector(".creator").textContent;
+        renderComments(id);
+        modal.classList.add("open");
+        document.getElementById("comment-input").focus();
+      });
+    });
+
+    document.getElementById("close-modal").addEventListener("click", () => modal.classList.remove("open"));
+    modal.addEventListener("click", e => { if (e.target === modal) modal.classList.remove("open"); });
+    document.addEventListener("keydown", e => { if (e.key === "Escape") modal.classList.remove("open"); });
+    document.getElementById("comment-form").addEventListener("submit", e => {
+      e.preventDefault();
+      const input = document.getElementById("comment-input");
+      const value = input.value.trim();
+      if (!value || !activePostId) return;
+      // Kommentare werden nur lokal angezeigt und nach dem Neuladen nicht gespeichert.
+      (commentsByPost[activePostId] ||= []).push(["du", value]);
+      addCommentElement("du", value);
+      input.value = "";
+      commentList.scrollTop = commentList.scrollHeight;
+    });
+  </script>
+</body>
+</html>
